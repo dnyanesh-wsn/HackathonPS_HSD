@@ -188,6 +188,13 @@ public class OrderService {
             return false;
         }
 
+        if (order.getStatus() == Order.Status.CREATED) { // WHY: guard against payment on orders stuck in CREATED (inventory phase incomplete)
+            log.error("Cannot mark paid — order still in CREATED state, inventory phase incomplete orderId={}", orderId);
+            logStore.error(SVC, traceId, "ORDER_NOT_READY",
+                    "markOrderPaid rejected — order has not advanced past CREATED state orderId=" + orderId);
+            throw new IllegalStateException("Order not ready for payment confirmation: inventory phase incomplete for orderId=" + orderId);
+        }
+
         if (order.getStatus() == Order.Status.CANCELLED) {
             String[] smCodes = {"PAID_AFTER_CANCEL", "STATE_MACHINE_VIOLATION", "ORDER_STATE_CONFLICT"};
             String[] smMsgs  = {
