@@ -367,6 +367,9 @@ public class ChaosScheduler {
     // Metrics collector — flushes telemetry and emits operational health logs (~70-80% noise)
     @Scheduled(fixedDelay = 35000, initialDelay = 3000)
     public void metricsCollectorWorker() {
+        // WHY: Clear pendingReconciliation map each metrics cycle to prevent unbounded heap growth
+        // from stale order entries accumulating across reconciliation cycles, reducing GC pressure.
+        pendingReconciliation.clear();
         String traceId = "metrics-" + UUID.randomUUID().toString().substring(0, 8);
 
         String[] noisy = {
@@ -419,7 +422,13 @@ public class ChaosScheduler {
             }
             // ~35% of WARN floods escalate to real downstream error
             if (random.nextDouble() < 0.35) {
-                try { Thread.sleep(1500 + random.nextInt(1000)); } catch (InterruptedException ignored) {}
+                // WHY: Apply exponential backoff before declaring circuit open, reducing
+                // thundering-herd retries that amplify GC pressure and downstream timeouts.
+                long backoff = 500;
+                for (int attempt = 0; attempt < 3; attempt++) {
+                    try { Thread.sleep(backoff); } catch (InterruptedException ignored) {}
+                    backoff *= 2; // WHY: Exponential backoff to ease downstream call pressure
+                }
                 logStore.error(SVC, traceId, "DOWNSTREAM_UNAVAILABLE",
                     "downstream service unresponsive after repeated timeouts — circuit open");
             }
