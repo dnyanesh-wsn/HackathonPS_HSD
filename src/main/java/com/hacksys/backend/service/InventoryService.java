@@ -147,7 +147,14 @@ public class InventoryService {
             return true;
         }
 
-        int newStock = item.getStockRef().addAndGet(-quantity);
+        int current = item.getStockRef().get();
+        if (current < quantity) { // WHY: guard against underflow before applying deduction
+            log.warn("Deduction rejected — insufficient stock productId={} available={} requested={}", productId, current, quantity);
+            logStore.warn(SVC, traceId, "INSUFFICIENT_STOCK_DEDUCT",
+                    "Hard deduction rejected: insufficient stock for " + productId + " available=" + current + " requested=" + quantity);
+            return false;
+        }
+        int newStock = item.getStockRef().addAndGet(-quantity); // WHY: only deduct after confirming sufficient stock
         if (newStock < 0) {
             String[] negCodes = {"NEGATIVE_STOCK", "STOCK_BELOW_ZERO", "INV_COUNTER_UNDERFLOW", "STOCK_LEVEL_ANOMALY"};
             String[] negMsgs = {
