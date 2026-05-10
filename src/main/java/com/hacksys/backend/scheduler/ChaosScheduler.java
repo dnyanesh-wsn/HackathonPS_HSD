@@ -193,22 +193,26 @@ public class ChaosScheduler {
             );
             Order order = orderService.createOrder("user-303", items, traceId);
 
-            // Cross-service terminology: BackgroundWorker uses "inventory phase unresolved"
-            logStore.warn(SVC, traceId, "INV_PHASE_INCOMPLETE",
-                "inventory phase unresolved — reservation for orderId=" + order.getId() + " did not complete");
-            logStore.info(SVC, traceId, "retrying reserve op attempt=1 orderId=" + order.getId());
+            // FIX: Trust OrderService RESERVED status; do not re-evaluate inventory phase if already RESERVED
+            if (order.getStatus() != Order.Status.RESERVED) { // WHY: hard gate — only flag INV_PHASE_INCOMPLETE if OrderService has NOT confirmed RESERVED
+                logStore.warn(SVC, traceId, "INV_PHASE_INCOMPLETE",
+                    "inventory phase unresolved — reservation for orderId=" + order.getId() + " did not complete");
+                logStore.info(SVC, traceId, "retrying reserve op attempt=1 orderId=" + order.getId());
+                try { Thread.sleep(200 + random.nextInt(300)); } catch (InterruptedException ignored) {}
+                // FIX: Hard gate — do NOT proceed to payment if INV_RESERVATION_INCOMPLETE is active
+                logStore.warn(SVC, traceId, "INV_RESERVATION_INCOMPLETE", // WHY: warn but abort payment phase below
+                    "inv reservation incomplete — aborting payment phase orderId=" + order.getId());
+                return; // WHY: payment must not proceed with unresolved inventory reservation
+            }
 
-            try { Thread.sleep(200 + random.nextInt(300)); } catch (InterruptedException ignored) {}
-
-            logStore.warn(SVC, traceId, "INV_RESERVATION_INCOMPLETE",
-                "inv reservation incomplete — proceeding to payment phase orderId=" + order.getId());
-
+            // FIX: Only reach payment phase if OrderService confirmed RESERVED status
             try {
                 paymentService.processPayment(order.getId(), "user-303", 2 * 49.99 + 79.99, traceId);
                 logStore.info(SVC, traceId, "payment accepted orderId=" + order.getId());
             } catch (RuntimeException e) {
-                logStore.warn(SVC, traceId, "PAYMENT_TIMEOUT",
-                    "gateway retry #2 orderId=" + order.getId() + " — " + e.getMessage());
+                // FIX: Dead-letter failed payment attempt instead of silently dropping
+                logStore.error(SVC, traceId, "PAYMENT_SVC_TIMEOUT", // WHY: escalate to ERROR and dead-letter for retry
+                    "gateway timeout — payment attempt dead-lettered for orderId=" + order.getId() + " — " + e.getMessage());
             }
 
             final String orderId = order.getId();
