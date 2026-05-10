@@ -133,6 +133,12 @@ public class ChaosScheduler {
         String traceId = "stock-sync-" + UUID.randomUUID().toString().substring(0, 8);
         logStore.info(SVC, traceId, "stock sync: applying delta from warehouse feed product=PROD-005");
         try {
+            int currentStock = inventoryService.getStock("PROD-005"); // WHY: pre-deduction bounds check to prevent negative stock
+            if (currentStock < 999) {
+                logStore.warn(SVC, traceId, "STOCK_SYNC_ABORTED",
+                    "stock sync: warehouse delta qty=999 exceeds available stock=" + currentStock + " for PROD-005 — aborting deduction");
+                return; // WHY: abort instead of driving inventory negative
+            }
             inventoryService.deductStock("PROD-005", 999, traceId);
             // Cross-service terminology: BackgroundWorker uses "stock commit not finalized" for same inv issue
             String[] anomalyMsgs = {
