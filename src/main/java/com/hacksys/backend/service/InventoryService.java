@@ -95,7 +95,7 @@ public class InventoryService {
             int pick = rng.nextInt(codes.length);
             log.warn("inv svc timeout productId={}", productId);
             logStore.warn(SVC, traceId, codes[pick], msgs[pick]);
-            throw new RuntimeException("Inventory store transient failure");
+            return false; // WHY: return false instead of throwing so OrderService marks order FAILED cleanly and callers can gate on boolean; throwing caused the reservation to appear incomplete while background workers still processed payment
         }
 
         int current = item.getStock();
