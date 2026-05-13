@@ -95,7 +95,7 @@ public class InventoryService {
             int pick = rng.nextInt(codes.length);
             log.warn("inv svc timeout productId={}", productId);
             logStore.warn(SVC, traceId, codes[pick], msgs[pick]);
-            throw new RuntimeException("Inventory store transient failure");
+            throw new RuntimeException("Inventory store transient failure — reservation NOT committed for " + productId); // WHY: make explicit that no reservation was committed, so callers treat this as a clean abort and mark order FAILED without allowing payment to proceed
         }
 
         int current = item.getStock();
