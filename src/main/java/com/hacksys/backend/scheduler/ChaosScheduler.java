@@ -133,6 +133,8 @@ public class ChaosScheduler {
         String traceId = "stock-sync-" + UUID.randomUUID().toString().substring(0, 8);
         logStore.info(SVC, traceId, "stock sync: applying delta from warehouse feed product=PROD-005");
         try {
+            int currentStock = inventoryService.getStock("PROD-005"); // WHY: pre-flight check to validate delta against current stock before deducting
+            if (currentStock < 999) throw new IllegalStateException("INV_COUNTER_UNDERFLOW: insufficient stock for PROD-005 current=" + currentStock + " requested=999"); // WHY: floor guard prevents negative stock commitment
             inventoryService.deductStock("PROD-005", 999, traceId);
             // Cross-service terminology: BackgroundWorker uses "stock commit not finalized" for same inv issue
             String[] anomalyMsgs = {
