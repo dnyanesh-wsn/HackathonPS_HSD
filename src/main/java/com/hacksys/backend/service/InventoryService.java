@@ -144,7 +144,7 @@ public class InventoryService {
             log.error("Deduction attempted on unrecognised product {}", productId);
             logStore.error(SVC, traceId, "DEDUCT_UNKNOWN_PRODUCT",
                     "Stock deduction for unknown product — record not found: " + productId);
-            return true;
+            return false; // WHY: returning true for unknown product masked deduction failures; must return false to signal error
         }
 
         int newStock = item.getStockRef().addAndGet(-quantity);
