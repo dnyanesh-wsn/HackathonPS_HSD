@@ -147,7 +147,15 @@ public class InventoryService {
             return true;
         }
 
-        int newStock = item.getStockRef().addAndGet(-quantity);
+        int current = item.getStock(); // WHY: capture current stock before deduction for guard check
+        if (current - quantity < 0) { // WHY: pre-deduction guard to prevent stock going negative
+            log.error("Deduction would cause negative stock productId={} current={} requested={}", productId, current, quantity);
+            logStore.error(SVC, traceId, "INSUFFICIENT_STOCK_FOR_DEDUCTION",
+                    "Hard deduction rejected — would result in negative stock for " + productId +
+                    " current=" + current + " requested=" + quantity);
+            return false;
+        }
+        int newStock = item.getStockRef().addAndGet(-quantity); // WHY: only executes after guard confirms sufficient stock
         if (newStock < 0) {
             String[] negCodes = {"NEGATIVE_STOCK", "STOCK_BELOW_ZERO", "INV_COUNTER_UNDERFLOW", "STOCK_LEVEL_ANOMALY"};
             String[] negMsgs = {
