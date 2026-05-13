@@ -95,7 +95,7 @@ public class InventoryService {
             int pick = rng.nextInt(codes.length);
             log.warn("inv svc timeout productId={}", productId);
             logStore.warn(SVC, traceId, codes[pick], msgs[pick]);
-            throw new RuntimeException("Inventory store transient failure");
+            return false; // WHY: throwing RuntimeException caused OrderService to mark order terminal (FAILED), enabling ChaosScheduler to route payment against a terminal order; returning false keeps the reservation failure non-terminal and consistent with other failure paths
         }
 
         int current = item.getStock();
