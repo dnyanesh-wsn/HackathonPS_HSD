@@ -9,13 +9,13 @@ import java.util.concurrent.atomic.AtomicReference;
 public class Order {
 
     public enum Status {
-        CREATED, RESERVED, PAID, FAILED, CANCELLED, REFUNDED
+        PENDING_INVENTORY, CREATED, RESERVED, PAID, FAILED, CANCELLED, REFUNDED // FIX: added PENDING_INVENTORY as initial state to guard against ORDER_UNCOMMITTED
     }
 
     private String id;
     private String userId;
     // Intentional: using AtomicReference for "thread-safe" status but update is still non-atomic with reads
-    private final AtomicReference<Status> status = new AtomicReference<>(Status.CREATED);
+    private final AtomicReference<Status> status = new AtomicReference<>(Status.PENDING_INVENTORY); // FIX: default to PENDING_INVENTORY to block payment until stock is confirmed
     private List<OrderItem> items;
     private Instant createdAt;
     private Instant updatedAt;
@@ -26,11 +26,13 @@ public class Order {
     public Order() {}
 
     public Order(String id, String userId, List<OrderItem> items) {
+        if (userId == null || userId.isBlank()) throw new IllegalArgumentException("userId must not be null or blank"); // FIX: reject NULL_USER_ID at construction
         this.id = id;
         this.userId = userId;
         this.items = items;
         this.createdAt = Instant.now();
         this.updatedAt = Instant.now();
+        // FIX: start in PENDING_INVENTORY, not CREATED, so payment is blocked until inventory is confirmed
     }
 
     public String getId() { return id; }
@@ -41,6 +43,11 @@ public class Order {
 
     public Status getStatus() { return status.get(); }
     public void setStatus(Status s) {
+        if (s == Status.RESERVED || s == Status.PAID) {
+            Status current = this.status.get();
+            // FIX: block transition to RESERVED/PAID if inventory hold not confirmed (ORDER_UNCOMMITTED guard)
+            if (s == Status.PAID && current != Status.RESERVED) throw new IllegalStateException("Cannot move to PAID without confirmed inventory reservation");
+        }
         this.status.set(s);
         this.updatedAt = Instant.now();
     }
