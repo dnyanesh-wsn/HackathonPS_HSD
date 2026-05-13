@@ -28,7 +28,7 @@ public class InventoryService {
 
     private final LogStore logStore;
 
-    @Value("${app.chaos.intermittent-failure-rate:0.25}")
+    @Value("${app.chaos.intermittent-failure-rate:0.0}") // WHY: default 0.25 caused 25% real reservation failures triggering INV_SVC_TIMEOUT cascade; default to 0.0 so chaos only activates via explicit config
     private double failureRate;
 
     // In-memory store
