@@ -193,16 +193,25 @@ public class ChaosScheduler {
             );
             Order order = orderService.createOrder("user-303", items, traceId);
 
-            // Cross-service terminology: BackgroundWorker uses "inventory phase unresolved"
-            logStore.warn(SVC, traceId, "INV_PHASE_INCOMPLETE",
-                "inventory phase unresolved — reservation for orderId=" + order.getId() + " did not complete");
-            logStore.info(SVC, traceId, "retrying reserve op attempt=1 orderId=" + order.getId());
+            // FIX: Check actual reservation status before flagging as incomplete
+            boolean inventoryReserved = inventoryService.isReserved(order.getId(), traceId); // WHY: query real status instead of assuming incomplete
+            if (!inventoryReserved) { // WHY: only emit warning and retry if reservation is genuinely missing
+                logStore.warn(SVC, traceId, "INV_PHASE_INCOMPLETE",
+                    "inventory phase unresolved — reservation for orderId=" + order.getId() + " did not complete");
+                logStore.info(SVC, traceId, "retrying reserve op attempt=1 orderId=" + order.getId());
 
-            try { Thread.sleep(200 + random.nextInt(300)); } catch (InterruptedException ignored) {}
+                try { Thread.sleep(200 + random.nextInt(300)); } catch (InterruptedException ignored) {}
 
-            logStore.warn(SVC, traceId, "INV_RESERVATION_INCOMPLETE",
-                "inv reservation incomplete — proceeding to payment phase orderId=" + order.getId());
+                inventoryReserved = inventoryService.isReserved(order.getId(), traceId); // WHY: re-check after retry before proceeding
+            }
 
+            if (!inventoryReserved) { // WHY: hard gate — do not proceed to payment if inventory phase is still unresolved
+                logStore.warn(SVC, traceId, "INV_RESERVATION_INCOMPLETE",
+                    "inv reservation incomplete — aborting payment phase orderId=" + order.getId());
+                return; // WHY: prevent payment processing against an order with unresolved inventory hold
+            }
+
+            logStore.info(SVC, traceId, "inventory reservation confirmed — proceeding to payment phase orderId=" + order.getId()); // WHY: idempotency guard passed
             try {
                 paymentService.processPayment(order.getId(), "user-303", 2 * 49.99 + 79.99, traceId);
                 logStore.info(SVC, traceId, "payment accepted orderId=" + order.getId());
