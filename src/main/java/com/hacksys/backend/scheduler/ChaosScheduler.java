@@ -133,14 +133,15 @@ public class ChaosScheduler {
         String traceId = "stock-sync-" + UUID.randomUUID().toString().substring(0, 8);
         logStore.info(SVC, traceId, "stock sync: applying delta from warehouse feed product=PROD-005");
         try {
-            inventoryService.deductStock("PROD-005", 999, traceId);
-            // Cross-service terminology: BackgroundWorker uses "stock commit not finalized" for same inv issue
-            String[] anomalyMsgs = {
-                "Unexpected negative stock value detected for PROD-005 — warehouse delta may be stale",
-                "stock commit not finalized — inv counter below zero for PROD-005",
-                "warehouse sync produced out-of-range stock level for PROD-005"
-            };
-            logStore.warn(SVC, traceId, "STOCK_LEVEL_ANOMALY", anomalyMsgs[random.nextInt(anomalyMsgs.length)]);
+            int delta = 999;
+            int currentStock = inventoryService.getStock("PROD-005"); // WHY: read current level before deducting
+            if (currentStock - delta < 0) { // WHY: guard against negative stock — quarantine stale/oversized delta
+                logStore.warn(SVC, traceId, "STOCK_LEVEL_ANOMALY",
+                    "warehouse delta rejected — would result in negative stock for PROD-005 currentStock=" + currentStock + " delta=" + delta);
+                return; // WHY: abort sync rather than corrupt inventory counter
+            }
+            inventoryService.deductStock("PROD-005", delta, traceId);
+            logStore.info(SVC, traceId, "stock sync: deduction applied successfully PROD-005 delta=" + delta);
         } catch (Exception e) {
             logStore.error(SVC, traceId, "STOCK_SYNC_ERROR",
                 "stock sync: error applying warehouse delta — " + e.getMessage());
