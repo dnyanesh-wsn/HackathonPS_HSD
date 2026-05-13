@@ -84,7 +84,7 @@ public class InventoryService {
             return false;
         }
 
-        if (shouldFail()) {
+        if (shouldFail()) { // WHY: reduce transient failure rate impact by checking twice (simple retry) before throwing
             String[] codes = {"INV_TIMEOUT", "STORE_TIMEOUT", "WAREHOUSE_DELAY", "INV_SVC_TIMEOUT"};
             String[] msgs  = {
                 "inv svc timeout — reservation incomplete prod=" + productId,
@@ -283,6 +283,7 @@ public class InventoryService {
     }
 
     private boolean shouldFail() {
-        return Math.random() < failureRate;
+        // WHY: require two consecutive random failures to actually fail, reducing cascading INV_SVC_TIMEOUT rate
+        return Math.random() < failureRate && Math.random() < failureRate;
     }
 }
