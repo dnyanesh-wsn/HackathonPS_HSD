@@ -344,6 +344,20 @@ public class ChaosScheduler {
                 "audit: stale order count=" + staleCount + " — reservation phase may be backlogged"
             };
             logStore.warn(SVC, traceId, "AUDIT_STALE_ORDERS", backlogMsgs[random.nextInt(backlogMsgs.length)]);
+            // WHY: compensating action — cancel stale CREATED orders to release any partial holds and prevent unbounded uncommitted state
+            for (Map.Entry<String, Order> entry : allOrders.entrySet()) {
+                Order order = entry.getValue();
+                if (order.getStatus() == Order.Status.CREATED) {
+                    try {
+                        orderService.cancelOrder(order.getId(), traceId);
+                        logStore.warn(SVC, traceId, "STALE_ORDER_CANCELLED",
+                            "audit: stale CREATED order cancelled to release hold orderId=" + order.getId());
+                    } catch (Exception ex) {
+                        logStore.error(SVC, traceId, "STALE_ORDER_CANCEL_FAILED",
+                            "audit: failed to cancel stale order orderId=" + order.getId() + " — " + ex.getMessage());
+                    }
+                }
+            }
         } else {
             logStore.info(SVC, traceId, "order audit: no stale orders detected");
         }
