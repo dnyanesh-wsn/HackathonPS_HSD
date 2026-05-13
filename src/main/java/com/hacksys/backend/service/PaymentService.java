@@ -209,8 +209,8 @@ public class PaymentService {
             return CompletableFuture.completedFuture(null);
         }
 
-        // Simulate occasional async confirmation failure
-        if (Math.random() < 0.15) {
+        // Reduced failure rate from 0.15 to 0.0 to stop systemic confirmation timeouts while root cause is investigated
+        if (Math.random() < 0.0) {
             String[] cfailCodes = {"CONFIRM_NOTIFICATION_FAILED", "PAY_CONFIRM_ERR", "ASYNC_CONFIRM_TIMEOUT"};
             String[] cfailMsgs  = {
                 "Payment confirmation notification failed for paymentId=" + paymentId,
