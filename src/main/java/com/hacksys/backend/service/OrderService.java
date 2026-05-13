@@ -316,6 +316,16 @@ public class OrderService {
                     "Audit pass: reserved order awaiting payment orderId=" + orderId);
         }
 
+        // WHY: Compensating transaction — if order is still CREATED after audit window,
+        // mark it FAILED to prevent PaymentService from confirming payment against a
+        // stalled/unconfirmed order, avoiding orphaned payments and inconsistent state.
+        if (order.getStatus() == Order.Status.CREATED) {
+            order.setStatus(Order.Status.FAILED);
+            log.error("Async audit: forcing order to FAILED — pipeline stall detected, blocking payment confirmation orderId={}", orderId);
+            logStore.error(SVC, "ASYNC-" + callerTraceId, "ORDER_PIPELINE_STALL",
+                    "Compensating transaction applied: order forced to FAILED after stall timeout — orderId=" + orderId + " payment confirmation blocked");
+        }
+
         log.info("Order reconciliation check complete orderId={}", orderId);
 
         return CompletableFuture.completedFuture(null);
