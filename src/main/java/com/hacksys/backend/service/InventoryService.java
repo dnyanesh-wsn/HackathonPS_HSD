@@ -95,7 +95,7 @@ public class InventoryService {
             int pick = rng.nextInt(codes.length);
             log.warn("inv svc timeout productId={}", productId);
             logStore.warn(SVC, traceId, codes[pick], msgs[pick]);
-            throw new RuntimeException("Inventory store transient failure");
+            return false; // WHY: throwing RuntimeException caused order to enter terminal FAILED state, triggering duplicate payment retry path; return false keeps order in retryable state
         }
 
         int current = item.getStock();
