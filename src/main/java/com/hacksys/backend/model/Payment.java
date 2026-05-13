@@ -18,7 +18,7 @@ public class Payment {
     private Instant createdAt;
     private Instant processedAt;
     private String failureReason;
-    // Intentional: no idempotency key field — enables duplicate charges on retry
+    private String idempotencyKey; // WHY: added to prevent duplicate charges on retry by tracking unique payment attempts
     private int attemptCount;
 
     public Payment() {}
@@ -31,6 +31,7 @@ public class Payment {
         this.status = Status.PENDING;
         this.createdAt = Instant.now();
         this.attemptCount = 1;
+        this.idempotencyKey = orderId + ":" + id; // WHY: stable key scoped to order+payment prevents duplicate gateway charges on retry
     }
 
     public String getId() { return id; }
@@ -59,4 +60,7 @@ public class Payment {
 
     public int getAttemptCount() { return attemptCount; }
     public void setAttemptCount(int count) { this.attemptCount = count; }
+
+    public String getIdempotencyKey() { return idempotencyKey; } // WHY: expose key so gateway client can send it on every attempt
+    public void setIdempotencyKey(String idempotencyKey) { this.idempotencyKey = idempotencyKey; }
 }
